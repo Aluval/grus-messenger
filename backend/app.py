@@ -35,13 +35,27 @@ if not secret_key or not mongodb_uri:
 
 app.config["SECRET_KEY"] = secret_key
 
+# Allowed frontend origins: configure FRONTEND_URL in Render.
+# Multiple origins can be comma-separated.
+frontend_origins = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173"
+)
+
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in frontend_origins.split(",")
+    if origin.strip()
+]
+
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": "http://localhost:5173"
+            "origins": allowed_origins
         }
-    }
+    },
+    supports_credentials=True
 )
 
 bcrypt.init_app(app)
@@ -193,7 +207,7 @@ app.register_blueprint(signal_bp)
 # Initialize Socket.IO
 socketio = SocketIO(
     app,
-    cors_allowed_origins=["http://localhost:5173"],
+    cors_allowed_origins=allowed_origins,
     async_mode="threading",
     logger=True,
     engineio_logger=True
@@ -596,8 +610,8 @@ def health():
 if __name__ == "__main__":
     socketio.run(
         app,
-        host="127.0.0.1",
-        port=5000,
-        debug=True,
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 5000)),
+        debug=False,
         use_reloader=False
     )
