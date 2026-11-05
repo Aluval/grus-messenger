@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+node_modules/
+__pycache__/
+*.pyc
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+*.log
+.DS_Store
+GRUS-encryption-audit.zip
+signal-api-results.txt

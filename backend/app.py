@@ -1,0 +1,603 @@
+from datetime import datetime, timezone
+from threading import Lock
+from gridfs import GridFSBucket
+import os
+import jwt
+from bson import ObjectId
+from dotenv import load_dotenv
+from flask import Flask, current_app, jsonify, session, request
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, rooms
+from pymongo import MongoClient
+
+from extensions import bcrypt
+from routes.auth import auth_bp
+from routes.users import users_bp
+from routes.conversations import conversations_bp
+from routes.messages import messages_bp
+from routes.connections import connections_bp, are_connected, is_blocked
+from routes.signal_relay import signal_bp
+from services.message_service import create_message
+
+load_dotenv()
+
+app = Flask(__name__)
+
+app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024  # 6 MB request limit
+
+secret_key = os.getenv("SECRET_KEY")
+mongodb_uri = os.getenv("MONGODB_URI")
+
+if not secret_key or not mongodb_uri:
+    raise RuntimeError(
+        "SECRET_KEY and MONGODB_URI must be configured in .env"
+    )
+
+app.config["SECRET_KEY"] = secret_key
+
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "http://localhost:5173"
+        }
+    }
+)
+
+bcrypt.init_app(app)
+
+# MongoDB connection
+mongo_client = MongoClient(
+    mongodb_uri,
+    serverSelectionTimeoutMS=5000
+)
+
+mongo_client.admin.command("ping")
+
+app.extensions["mongo_client"] = mongo_client
+app.extensions["mongo_db"] = mongo_client["grus"]
+# GRUS image storage using MongoDB GridFS
+app.extensions["grus_images_bucket"] = GridFSBucket(
+    app.extensions["mongo_db"],
+    bucket_name="grus_images"
+)
+
+# Database collections
+db = app.extensions["mongo_db"]
+
+db["signal_devices"].create_index(
+    [("user_id", 1), ("device_id", 1)],
+    unique=True,
+    name="unique_signal_user_device"
+)
+
+db["signal_identities"].create_index(
+    [
+        ("user_id", 1),
+        ("device_id", 1),
+        ("identity_type", 1)
+    ],
+    unique=True,
+    name="unique_signal_device_identity"
+)
+
+# Signal Protocol public prekeys
+db["signal_prekeys"].create_index(
+    [
+        ("user_id", 1),
+        ("device_id", 1),
+        ("identity_type", 1),
+        ("type", 1),
+        ("key_id", 1)
+    ],
+    unique=True,
+    name="unique_signal_prekey"
+)
+
+# Signal Protocol encrypted envelope mailbox
+db["signal_envelopes"].create_index(
+    [
+        ("target_user_id", 1),
+        ("target_device_id", 1),
+        ("created_at", 1)
+    ],
+    name="signal_mailbox_order"
+)
+
+db["signal_envelopes"].create_index(
+    [("expires_at", 1)],
+    expireAfterSeconds=0,
+    name="signal_envelope_expiry"
+)
+
+db["signal_envelopes"].create_index(
+    [("sender_user_id", 1), ("client_message_id", 1)],
+    unique=True,
+    sparse=True,
+    name="unique_signal_client_message"
+)
+
+users = db["users"]
+conversations = db["conversations"]
+messages = db["messages"]
+connection_requests = db["connection_requests"]
+connections = db["connections"]
+blocked_users = db["blocked_users"]
+identity_recovery = db["identity_recovery"]
+password_reset_tokens = db["password_reset_tokens"]
+password_reset_requests = db["password_reset_requests"]
+
+# Database indexes
+users.create_index("username", unique=True)
+users.create_index("email", unique=True)
+
+conversations.create_index("pair_key", unique=True)
+
+messages.create_index([
+    ("conversation_id", 1),
+    ("created_at", 1)
+])
+
+connections.create_index("pair_key", unique=True)
+
+connection_requests.create_index(
+    [("sender_id", 1), ("recipient_id", 1)],
+    unique=True,
+    partialFilterExpression={"status": "pending"}
+)
+
+connection_requests.create_index([
+    ("recipient_id", 1),
+    ("status", 1),
+    ("created_at", -1)
+])
+
+connection_requests.create_index([
+    ("sender_id", 1),
+    ("status", 1),
+    ("created_at", -1)
+])
+
+blocked_users.create_index(
+    [("blocker_id", 1), ("blocked_id", 1)],
+    unique=True
+)
+
+blocked_users.create_index("blocked_id")
+
+identity_recovery.create_index("user_id", unique=True)
+
+password_reset_tokens.create_index("token_hash", unique=True)
+password_reset_tokens.create_index(
+    "expires_at",
+    expireAfterSeconds=0
+)
+
+password_reset_requests.create_index(
+    "created_at",
+    expireAfterSeconds=3600
+)
+
+password_reset_requests.create_index(
+    [("email_hash", 1), ("created_at", -1)]
+)
+
+# Register API routes
+app.register_blueprint(auth_bp)
+app.register_blueprint(users_bp)
+app.register_blueprint(conversations_bp)
+app.register_blueprint(messages_bp)
+app.register_blueprint(connections_bp)
+app.register_blueprint(signal_bp)
+
+# Initialize Socket.IO
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=["http://localhost:5173"],
+    async_mode="threading",
+    logger=True,
+    engineio_logger=True
+)
+
+app.extensions["socketio"] = socketio
+
+
+# --------------------------------------------------
+# GRUS ONLINE / OFFLINE PRESENCE
+# --------------------------------------------------
+
+presence_lock = Lock()
+
+# user_id -> set of active Socket.IO session IDs
+active_user_sessions = {}
+
+def get_accepted_connection_ids(user_id):
+    """Return users who are accepted connections and not blocked."""
+    documents = connections.find({
+        "participants": user_id
+    })
+
+    accepted_ids = []
+
+    for document in documents:
+        for participant in document["participants"]:
+            if participant == user_id:
+                continue
+
+            if is_blocked(user_id, participant):
+                continue
+
+            accepted_ids.append(str(participant))
+
+    return accepted_ids
+
+
+def broadcast_presence(user_id, is_online, last_seen=None):
+    """Notify only the user's accepted connections."""
+    recipients = get_accepted_connection_ids(user_id)
+
+    if not recipients:
+        return
+
+    event_data = {
+        "user_id": str(user_id),
+        "is_online": is_online,
+        "last_seen": (
+    last_seen.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+    if last_seen and not is_online
+    else None
+)
+    }
+
+    for recipient_id in recipients:
+        socketio.emit(
+            "presence_update",
+            event_data,
+            to=f"user:{recipient_id}"
+        )
+
+
+def add_user_session(user_id, sid):
+    """Register a new authenticated socket session."""
+    user_key = str(user_id)
+
+    with presence_lock:
+        sessions = active_user_sessions.setdefault(user_key, set())
+
+        was_offline = len(sessions) == 0
+        sessions.add(sid)
+
+    if was_offline:
+        broadcast_presence(user_id, True)
+
+
+def remove_user_session(user_id, sid):
+    """Mark offline only after the last session disconnects."""
+    user_key = str(user_id)
+
+    with presence_lock:
+        sessions = active_user_sessions.get(user_key)
+
+        if not sessions:
+            return
+
+        sessions.discard(sid)
+
+        if sessions:
+            return
+
+        active_user_sessions.pop(user_key, None)
+
+    last_seen = datetime.now(timezone.utc)
+
+    users.update_one(
+        {"_id": user_id},
+        {"$set": {"last_seen": last_seen}}
+    )
+
+    broadcast_presence(user_id, False, last_seen)
+
+
+MAX_MESSAGE_LENGTH = 20000
+MAX_ENCRYPTED_PAYLOAD_LENGTH = MAX_MESSAGE_LENGTH
+
+
+def get_socket_user():
+    user_id = session.get("user_id")
+
+    if not user_id or not ObjectId.is_valid(user_id):
+        return None
+
+    return ObjectId(user_id)
+
+
+def get_socket_conversation_access(user_id, conversation_id):
+    """
+    Verify conversation membership, accepted connection,
+    and blocking status.
+    """
+
+    if not ObjectId.is_valid(conversation_id):
+        return None
+
+    conversation = conversations.find_one({
+        "_id": ObjectId(conversation_id),
+        "participants": user_id
+    })
+
+    if not conversation:
+        return None
+
+    other_user_id = next(
+        (
+            participant
+            for participant in conversation["participants"]
+            if participant != user_id
+        ),
+        None
+    )
+
+    if other_user_id is None:
+        return None
+
+    if is_blocked(user_id, other_user_id):
+        return None
+
+    if not are_connected(user_id, other_user_id):
+        return None
+
+    return conversation
+
+
+
+@socketio.on("connect")
+def handle_connect(auth):
+    if not isinstance(auth, dict):
+        return False
+
+    token = auth.get("token")
+
+    if not isinstance(token, str):
+        return False
+
+    try:
+        payload = jwt.decode(
+            token,
+            app.config["SECRET_KEY"],
+            algorithms=["HS256"]
+        )
+
+        subject = payload.get("sub")
+
+        if not isinstance(subject, str) or not ObjectId.is_valid(subject):
+            return False
+
+        user_id = ObjectId(subject)
+
+        user = users.find_one({
+            "_id": user_id
+        })
+
+        if not user:
+            return False
+
+        session["user_id"] = str(user_id)
+
+        # Subscribe this socket to the user's private presence room.
+        join_room(f"user:{user_id}")
+
+        # Register this active session.
+        add_user_session(user_id, request.sid)
+
+        print(f"GRUS user connected: {user['username']}")
+
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        return False
+
+
+# Handle authenticated user disconnection
+@socketio.on("disconnect")
+def handle_disconnect(reason=None):
+    user_id = get_socket_user()
+
+    if not user_id:
+        return
+
+    remove_user_session(user_id, request.sid)
+
+    print(f"GRUS user disconnected: {user_id}")
+
+
+# Send the current online status of all accepted connections
+@socketio.on("get_presence")
+def handle_get_presence():
+    user_id = get_socket_user()
+
+    if not user_id:
+        emit("error_message", {
+            "error": "Authentication required"
+        })
+        return
+
+    connection_ids = get_accepted_connection_ids(user_id)
+
+    with presence_lock:
+        online_users = {
+            connected_user
+            for connected_user in connection_ids
+            if active_user_sessions.get(connected_user)
+        }
+
+    presence_list = []
+
+    for connected_user in connection_ids:
+        other_user_id = ObjectId(connected_user)
+
+        user = users.find_one(
+            {"_id": other_user_id},
+            {"username": 1, "last_seen": 1}
+        )
+
+        if not user:
+            continue
+
+        is_online = connected_user in online_users
+
+        last_seen = user.get("last_seen")
+
+        presence_list.append({
+            "user_id": connected_user,
+            "username": user.get("username"),
+            "is_online": is_online,
+            "last_seen": (
+    last_seen.replace(tzinfo=timezone.utc)
+    .isoformat()
+    .replace("+00:00", "Z")
+    if last_seen and not is_online
+    else None
+)
+        })
+
+    emit("presence_snapshot", {
+        "users": presence_list
+    })
+
+# Join an accepted conversation room
+@socketio.on("join_conversation")
+def handle_join_conversation(data):
+    user_id = get_socket_user()
+
+    if not user_id or not isinstance(data, dict):
+        emit("error_message", {
+            "error": "Authentication required"
+        })
+        return
+
+    conversation_id = data.get("conversation_id")
+
+    conversation = get_socket_conversation_access(
+        user_id,
+        conversation_id
+    )
+
+    if not conversation:
+        emit("error_message", {
+            "error": "Conversation access denied"
+        })
+        return
+
+    room = f"conversation:{conversation_id}"
+
+    join_room(room)
+
+    emit("joined_conversation", {
+        "conversation_id": conversation_id
+    })
+
+
+# Send an encrypted payload through Socket.IO
+
+@socketio.on("send_message")
+def handle_send_message(data):
+    user_id = get_socket_user()
+
+    if not user_id or not isinstance(data, dict):
+        emit("error_message", {
+            "error": "Authentication required"
+        })
+        return
+
+    conversation_id = data.get("conversation_id")
+    encrypted_payload = data.get("encrypted_payload")
+
+    if (
+        not isinstance(conversation_id, str)
+        or not ObjectId.is_valid(conversation_id)
+    ):
+        emit("error_message", {
+            "error": "Invalid conversation ID"
+        })
+        return
+
+    if (
+        not isinstance(encrypted_payload, str)
+        or not encrypted_payload.strip()
+        or len(encrypted_payload.strip()) > MAX_ENCRYPTED_PAYLOAD_LENGTH
+    ):
+        emit("error_message", {
+            "error": "Invalid encrypted payload"
+        })
+        return
+
+    encrypted_payload = encrypted_payload.strip()
+
+    conversation = get_socket_conversation_access(
+        user_id,
+        conversation_id
+    )
+
+    if not conversation:
+        emit("error_message", {
+            "error": "Messaging is not available"
+        })
+        return
+
+    room = f"conversation:{conversation_id}"
+
+    if room not in rooms():
+        emit("error_message", {
+            "error": "Join the conversation before sending messages"
+        })
+        return
+
+    try:
+        message, response_data = create_message(
+            sender_id=user_id,
+            conversation=conversation,
+            conversation_id=conversation_id,
+            encrypted_payload=encrypted_payload,
+        )
+
+        emit("message_sent", {
+            "data": response_data
+        })
+
+    except (ValueError, PermissionError) as error:
+        emit("error_message", {
+            "error": str(error)
+        })
+
+    except Exception:
+        current_app.logger.exception(
+            "Socket.IO message creation failed"
+        )
+        emit("error_message", {
+            "error": "Unable to send message"
+        })
+
+
+@app.get("/")
+def home():
+    return jsonify({
+        "application": "GRUS",
+        "version": "0.1.0",
+        "status": "running"
+    })
+
+
+@app.get("/api/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "application": "GRUS API"
+    })
+
+
+if __name__ == "__main__":
+    socketio.run(
+        app,
+        host="127.0.0.1",
+        port=5000,
+        debug=True,
+        use_reloader=False
+    )

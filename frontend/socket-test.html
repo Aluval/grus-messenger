@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><title>GRUS WebSocket Test</title></head>
+<body>
+<h2>GRUS WebSocket Diagnostic</h2>
+<p id="status">Connecting...</p>
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script>
+const status = document.getElementById("status");
+const socket = io("http://127.0.0.1:5001");
+
+socket.on("connect", () => {
+  status.textContent = "CONNECTED: " + socket.id;
+  socket.emit("ping_test", {});
+});
+
+socket.on("pong_test", data => {
+  status.textContent += " | " + data.message;
+});
+
+socket.on("connect_error", error => {
+  status.textContent = "CONNECTION ERROR: " + error.message;
+});
+</script>
+</body>
+</html>

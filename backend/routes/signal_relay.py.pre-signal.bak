@@ -1,0 +1,252 @@
+
+from datetime import datetime, timezone
+
+from flask import Blueprint, current_app, jsonify, request
+from pymongo.errors import DuplicateKeyError
+
+from routes.auth import token_required
+import base64
+from bson import ObjectId
+
+signal_bp = Blueprint(
+    "signal",
+    __name__,
+    url_prefix="/api/signal"
+)
+
+
+MAX_DEVICES_PER_USER = 5
+
+VALID_DEVICE_TYPES = {
+    "mobile",
+    "desktop",
+    "tablet",
+    "web"
+}
+
+
+def get_db():
+    return current_app.extensions["mongo_db"]
+
+
+def get_devices():
+    return get_db()["signal_devices"]
+
+
+@signal_bp.post("/devices")
+@token_required
+def register_device(current_user):
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON request"}), 400
+
+    device_type = data.get("device_type", "web")
+
+    if device_type not in VALID_DEVICE_TYPES:
+        return jsonify({"error": "Invalid device type"}), 400
+
+    user_id = current_user["_id"]
+    devices = get_devices()
+
+    existing_devices = list(
+        devices.find(
+            {"user_id": user_id},
+            {"device_id": 1, "_id": 0}
+        )
+    )
+
+    used_ids = {
+        item["device_id"]
+        for item in existing_devices
+    }
+
+    available_ids = [
+        device_id
+        for device_id in range(1, MAX_DEVICES_PER_USER + 1)
+        if device_id not in used_ids
+    ]
+
+    if not available_ids:
+        return jsonify({
+            "error": "Maximum device limit reached"
+        }), 409
+
+    device_id = available_ids[0]
+    now = datetime.now(timezone.utc)
+
+    device_document = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "device_type": device_type,
+        "registered": False,
+        "linked": False,
+        "enabled": True,
+        "created_at": now,
+        "last_seen_at": None
+    }
+
+    try:
+        devices.insert_one(device_document)
+
+    except DuplicateKeyError:
+        return jsonify({
+            "error": "Device registration conflict. Please retry."
+        }), 409
+
+    return jsonify({
+        "message": "Device registration initiated",
+        "device": {
+            "device_id": device_id,
+            "device_type": device_type,
+            "registered": False,
+            "enabled": True
+        }
+    }), 201
+
+
+def decode_public_key(value):
+    """Validate a Base64-encoded 32-byte public key."""
+    if not isinstance(value, str) or not value:
+        return None
+
+    try:
+        decoded = base64.b64decode(value, validate=True)
+
+        if len(decoded) != 32:
+            return None
+
+        # Require canonical Base64 representation.
+        if base64.b64encode(decoded).decode("ascii") != value:
+            return None
+
+        return value
+
+    except (ValueError, TypeError):
+        return None
+
+
+@signal_bp.post("/identity")
+@token_required
+def provision_identity(current_user):
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON request"}), 400
+
+    device_id = data.get("device_id")
+    identity = data.get("identity")
+    registration_id = data.get("registration_id")
+    identity_type = data.get("identity_type", "aci")
+
+    if (
+        isinstance(device_id, bool)
+        or not isinstance(device_id, int)
+        or not 1 <= device_id <= MAX_DEVICES_PER_USER
+    ):
+        return jsonify({"error": "Invalid device ID"}), 400
+
+    if (
+        isinstance(registration_id, bool)
+        or not isinstance(registration_id, int)
+        or not 1 <= registration_id <= 16380
+    ):
+        return jsonify({"error": "Invalid registration ID"}), 400
+
+    if identity_type not in {"aci", "pni"}:
+        return jsonify({"error": "Invalid identity type"}), 400
+
+    if not isinstance(identity, dict):
+        return jsonify({"error": "Invalid identity"}), 400
+
+    if identity.get("version") != 1:
+        return jsonify({"error": "Unsupported identity version"}), 400
+
+    x25519_key = decode_public_key(
+        identity.get("x25519PublicKey")
+    )
+
+    ed25519_key = decode_public_key(
+        identity.get("ed25519PublicKey")
+    )
+
+    if not x25519_key or not ed25519_key:
+        return jsonify({"error": "Invalid public key encoding"}), 400
+
+    devices = get_devices()
+
+    device = devices.find_one({
+        "user_id": current_user["_id"],
+        "device_id": device_id,
+        "enabled": True
+    })
+
+    if not device:
+        return jsonify({"error": "Registered device not found"}), 404
+
+    identities = get_db()["signal_identities"]
+
+    existing = identities.find_one({
+        "user_id": current_user["_id"],
+        "identity_type": identity_type
+    })
+
+    if existing:
+        same_identity = (
+            existing["identity"]["x25519PublicKey"] == x25519_key
+            and existing["identity"]["ed25519PublicKey"] == ed25519_key
+        )
+
+        if not same_identity:
+            return jsonify({
+                "error": "Identity already exists. Use the identity rotation process."
+            }), 409
+
+        return jsonify({
+            "message": "Identity already provisioned",
+            "identity_type": identity_type
+        }), 200
+
+    now = datetime.now(timezone.utc)
+
+    identity_document = {
+        "user_id": current_user["_id"],
+        "device_id": device_id,
+        "identity_type": identity_type,
+        "identity": {
+            "version": 1,
+            "x25519PublicKey": x25519_key,
+            "ed25519PublicKey": ed25519_key
+        },
+        "registration_id": registration_id,
+        "created_at": now,
+        "updated_at": now
+    }
+
+    try:
+        identities.insert_one(identity_document)
+
+    except DuplicateKeyError:
+        return jsonify({
+            "error": "Identity provisioning conflict"
+        }), 409
+
+    devices.update_one(
+        {
+            "user_id": current_user["_id"],
+            "device_id": device_id
+        },
+        {
+            "$set": {
+                "registered": True,
+                "last_seen_at": now
+            }
+        }
+    )
+
+    return jsonify({
+        "message": "Identity provisioned successfully",
+        "identity_type": identity_type,
+        "device_id": device_id
+    }), 201
+
