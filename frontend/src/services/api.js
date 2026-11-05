@@ -1,4 +1,5 @@
-﻿export const API_URL = "http://127.0.0.1:5000";
+﻿export const API_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:5000";
 
 export async function apiRequest(path, options = {}) {
   const {
@@ -16,7 +17,6 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (fetchOptions.body instanceof FormData) {
-    // Let the browser set multipart/form-data and its boundary.
     delete requestHeaders["Content-Type"];
     delete requestHeaders["content-type"];
   } else if (
