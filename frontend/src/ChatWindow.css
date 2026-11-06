@@ -1,159 +1,69 @@
 
-/* =====================================================
-   GRUS — CHAT WINDOW
-   Desktop · Tablet · Mobile
-===================================================== */
-
-/* Base chat container */
-.grus-chat-page,
-.grus-chat-page * {
-  box-sizing: border-box;
-}
+/* GRUS Chat Window — Responsive Layout */
 
 .grus-chat-page {
   display: flex;
-  flex: 1 1 0%;
   flex-direction: column;
-
   width: 100%;
-  height: 100%;
   max-width: 100%;
-
+  height: min(75vh, 850px);
+  min-height: 480px;
   min-width: 0;
-  min-height: 0;
-
   background: #10101b;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 16px;
-
   overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* =====================================================
-   CHAT HEADER
-===================================================== */
-
-.grus-chat-page > header {
-  flex: 0 0 auto;
+.grus-chat-header {
+  flex-shrink: 0;
   min-width: 0;
 }
 
-/* =====================================================
-   ENCRYPTION NOTICE
-===================================================== */
-
-.grus-chat-page > header + div {
-  flex: 0 0 auto;
-  min-width: 0;
+.grus-chat-notice {
+  flex-shrink: 0;
 }
-
-/* =====================================================
-   MESSAGE HISTORY
-===================================================== */
 
 .grus-chat-messages {
-  flex: 1 1 0% !important;
-
-  min-width: 0;
+  flex: 1;
   min-height: 0;
-
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
-
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #777 transparent;
 }
 
-/* Message rows */
-.grus-chat-messages > div {
-  min-width: 0;
-}
-
-/* Message bubbles */
 .grus-chat-bubble {
   min-width: 0;
   max-width: min(75%, 600px);
-
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-/* Images inside messages */
-.grus-chat-messages img {
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
-/* =====================================================
-   MESSAGE COMPOSER
-===================================================== */
-
 .grus-chat-composer {
-  display: flex;
-  flex: 0 0 auto !important;
-  flex-wrap: wrap;
-  align-items: center;
-
-  width: 100%;
-  min-width: 0;
-
-  box-sizing: border-box;
-}
-
-/* Image preview */
-.grus-chat-image-preview {
-  order: -1;
-
-  flex: 0 0 100%;
-
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-/* Image preview contents */
-.grus-chat-image-preview img {
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
-/* Message input */
-.grus-chat-composer input:not([type="file"]) {
-  flex: 1 1 60px;
-
-  width: auto;
-  min-width: 0;
-
-  box-sizing: border-box;
-}
-
-/* Composer buttons */
-.grus-chat-composer button {
   flex-shrink: 0;
-  white-space: nowrap;
+  min-width: 0;
 }
 
-/* Send button */
+.grus-chat-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .grus-chat-send {
   flex-shrink: 0;
   white-space: nowrap;
 }
 
-/* =====================================================
-   TABLETS
-===================================================== */
-
-@media screen and (max-width: 900px) {
-
+/* Tablets */
+@media (max-width: 900px) {
   .grus-chat-page {
+    height: calc(100dvh - 150px);
+    min-height: 400px;
     border-radius: 12px;
   }
 
@@ -162,139 +72,358 @@
   }
 }
 
-/* =====================================================
-   MOBILE PHONES
-===================================================== */
-
-@media screen and (max-width: 650px) {
-
+/* Mobile phones */
+@media (max-width: 600px) {
   .grus-chat-page {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-
-    width: 100%;
-    height: 100%;
-
-    min-width: 0;
-    min-height: 0;
-
-    max-width: none;
-    max-height: none;
-
-    margin: 0;
-    padding: 0;
-
-    border: 0;
+    height: calc(100dvh - 90px);
+    min-height: 320px;
     border-radius: 0;
-
-    overflow: hidden;
+    border-left: 0;
+    border-right: 0;
   }
 
-  /* Header */
-  .grus-chat-page > header {
-    flex: 0 0 auto;
-
+  .grus-chat-header {
     padding: 12px !important;
     gap: 10px !important;
   }
 
-  /* Encryption notice */
-  .grus-chat-page > header + div {
-    flex: 0 0 auto;
-
+  .grus-chat-notice {
     padding: 9px 10px !important;
     font-size: 11px !important;
   }
 
-  /* Scrollable message area */
   .grus-chat-messages {
-    flex: 1 1 0% !important;
-
-    min-width: 0;
-    min-height: 0;
-
     padding: 12px !important;
     gap: 10px !important;
-
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
   }
 
-  /* Message bubbles */
   .grus-chat-bubble {
     max-width: 88%;
-
     padding: 10px 12px !important;
     font-size: 14px;
   }
 
-  /* Bottom composer */
   .grus-chat-composer {
-    display: flex;
-    flex: 0 0 auto !important;
-
-    flex-wrap: wrap;
-    align-items: center;
-
-    width: 100%;
-    min-width: 0;
-
-    gap: 6px !important;
-
     padding: 10px !important;
-    padding-bottom: calc(
-      10px + env(safe-area-inset-bottom, 0px)
-    ) !important;
+    gap: 8px !important;
   }
 
-  /* Image preview */
-  .grus-chat-image-preview {
-    flex: 0 0 100%;
-
-    width: 100%;
-    min-width: 0;
-
-    padding: 10px !important;
-  }
-
-  /* Input */
-  .grus-chat-composer input:not([type="file"]) {
-    flex: 1 1 60px;
-
-    width: auto;
-    min-width: 0;
-
-    padding: 11px !important;
+  .grus-chat-input {
+    padding: 12px !important;
     font-size: 14px;
-  }
-
-  /* Buttons */
-  .grus-chat-composer button {
-    flex-shrink: 0;
-
-    padding: 9px !important;
-    font-size: 13px;
   }
 
   .grus-chat-send {
     padding: 10px 13px !important;
+    font-size: 13px;
   }
 }
 
-/* =====================================================
-   VERY SMALL PHONES
-===================================================== */
+/* Very narrow phones */
+@media (max-width: 360px) {
+  .grus-chat-composer {
+    gap: 6px !important;
+  }
 
-@media screen and (max-width: 360px) {
+  .grus-chat-send {
+    padding: 9px !important;
+  }
 
   .grus-chat-bubble {
     max-width: 92%;
   }
+}
 
+
+/* GRUS — Full-height responsive chat */
+
+.grus-chat-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #10101b;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Chat header */
+.grus-chat-page > header {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* Encryption notice */
+.grus-chat-page > header + div {
+  flex-shrink: 0;
+}
+
+/* Message history */
+.grus-chat-page > div[style*="overflow-y"] {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #777 transparent;
+}
+
+/* Message bubbles */
+.grus-chat-page img {
+  max-width: 100%;
+}
+
+/* Composer */
+.grus-chat-page > form {
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.grus-chat-page > form input:not([type="file"]) {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.grus-chat-page > form button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .grus-chat-page {
+    border-radius: 12px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .grus-chat-page {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .grus-chat-page > header {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .grus-chat-page > header + div {
+    padding: 9px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .grus-chat-page > div[style*="overflow-y"] {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .grus-chat-page > form {
+    padding: 10px !important;
+    gap: 8px !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .grus-chat-page > form input:not([type="file"]) {
+    padding: 12px !important;
+    font-size: 14px;
+  }
+
+  .grus-chat-page > form button {
+    padding: 10px 13px !important;
+    font-size: 13px;
+  }
+}
+
+/* Narrow phones */
+@media (max-width: 360px) {
+  .grus-chat-page > form {
+    gap: 6px !important;
+  }
+
+  .grus-chat-page > form button {
+    padding: 9px !important;
+  }
+}
+/* =====================================
+   GRUS — FULL HEIGHT CHAT LAYOUT
+===================================== */
+
+/* Desktop */
+.dashboard-main:has(.grus-chat-page) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 20px;
+}
+
+.dashboard-main:has(.grus-chat-page) .dashboard-desktop-content {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.dashboard-main:has(.grus-chat-page) .grus-chat-page {
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+}
+
+/* Mobile */
+@media (max-width: 650px) {
+  .grus-dashboard:has(.grus-chat-page) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .grus-dashboard:has(.grus-chat-page) .dashboard-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .grus-dashboard:has(.grus-chat-page) .dashboard-desktop-content {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .grus-dashboard:has(.grus-chat-page) .grus-chat-page {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+  }
+}
+
+/* =================================
+   GRUS MOBILE COMPOSER FIX
+================================= */
+
+.grus-chat-page {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.grus-chat-messages {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Composer */
+.grus-chat-composer {
+  display: flex;
+  flex-wrap: wrap !important;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Image preview: full row above controls */
+.grus-chat-image-preview {
+  order: -1;
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Image preview contents */
+.grus-chat-image-preview img {
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Message input */
+.grus-chat-composer input:not([type="file"]) {
+  flex: 1 1 60px;
+  width: auto;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Buttons */
+.grus-chat-composer button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .grus-chat-page {
+    height: 100% !important;
+    min-height: 0 !important;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .grus-chat-composer {
+    gap: 6px !important;
+    padding: 10px !important;
+    padding-bottom:
+      max(10px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .grus-chat-composer input:not([type="file"]) {
+    font-size: 14px;
+    padding: 11px !important;
+  }
+
+  .grus-chat-composer button {
+    padding: 9px !important;
+    font-size: 13px;
+  }
+
+  .grus-chat-image-preview {
+    padding: 10px !important;
+  }
+}
+
+@media (max-width: 360px) {
   .grus-chat-composer {
     gap: 5px !important;
   }
@@ -302,4 +431,20 @@
   .grus-chat-composer button {
     padding: 8px !important;
   }
+}
+/* Prevent message content from overflowing */
+.grus-chat-page .grus-chat-messages {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* All images inside message bubbles */
+.grus-chat-page .grus-chat-messages img {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Keep message content within its bubble */
+.grus-chat-page .grus-chat-messages > div {
+  min-width: 0;
 }
