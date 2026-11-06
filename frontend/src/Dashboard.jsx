@@ -115,6 +115,7 @@ export default function Dashboard({
   results = [],
   loading = false,
   error = "",
+  notice = "",
   onConnect,
   children,
 }) {
