@@ -395,7 +395,18 @@ export default function Dashboard({
         </button>
       </form>
 
-      {error && <p className="dashboard-error">{error}</p>}
+      {/* MOBILE DISCOVER NOTIFICATIONS */}
+{(notice || error) && (
+  <div
+    className={`mobile-discover-notification ${
+      error ? "is-error" : "is-success"
+    }`}
+    role="status"
+    aria-live="polite"
+  >
+    {notice || error}
+  </div>
+)}
 
       <div className="mobile-discover-results">
         <div className="mobile-results-heading">
