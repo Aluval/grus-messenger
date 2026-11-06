@@ -121,6 +121,42 @@ export default function Dashboard({
 }) {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  
+// Keep the dashboard synchronized with the visible mobile viewport.
+useEffect(() => {
+  const updateViewportHeight = () => {
+    const height =
+      window.visualViewport?.height || window.innerHeight;
+
+    document.documentElement.style.setProperty(
+      "--grus-viewport-height",
+      `${height}px`
+    );
+  };
+
+  let frameId = requestAnimationFrame(updateViewportHeight);
+
+  const handleResize = () => {
+    cancelAnimationFrame(frameId);
+    frameId = requestAnimationFrame(updateViewportHeight);
+  };
+
+  updateViewportHeight();
+
+  window.addEventListener("resize", handleResize);
+  window.addEventListener("orientationchange", handleResize);
+
+  window.visualViewport?.addEventListener("resize", handleResize);
+
+  return () => {
+    cancelAnimationFrame(frameId);
+    window.removeEventListener("resize", handleResize);
+    window.removeEventListener("orientationchange", handleResize);
+    window.visualViewport?.removeEventListener("resize", handleResize);
+  };
+}, []);
+
   const currentSection =
     navigation.find((item) => item.id === activeSection) ||
     navigation[0];
