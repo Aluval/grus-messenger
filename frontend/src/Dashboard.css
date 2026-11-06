@@ -1145,3 +1145,139 @@
 }
 
 
+/* =====================================================
+   GRUS — MOBILE CHAT POSITION & SCROLL FIX
+===================================================== */
+
+@media (max-width: 650px) {
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  /* Fixed dashboard viewport */
+  .grus-dashboard:has(.grus-chat-page) {
+    position: fixed;
+    inset: 0;
+
+    display: flex !important;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Remove page-level scrolling */
+  .grus-dashboard:has(.grus-chat-page) .dashboard-main {
+    position: relative;
+
+    display: flex !important;
+    flex: 1 1 0;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    margin: 0;
+    padding: 0;
+
+    overflow: hidden !important;
+  }
+
+  /* Chat content container */
+  .grus-dashboard:has(.grus-chat-page) .dashboard-desktop-content {
+    display: flex !important;
+    flex: 1 1 0;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    margin: 0;
+    padding: 0;
+
+    overflow: hidden;
+  }
+
+  /* Chat window */
+  .grus-dashboard .grus-chat-page {
+    position: relative;
+
+    display: flex !important;
+    flex: 1 1 0;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    max-width: none;
+    max-height: none;
+
+    margin: 0;
+    border-radius: 0;
+
+    overflow: hidden;
+  }
+
+  /* Message history owns vertical scrolling */
+  .grus-dashboard .grus-chat-messages {
+    position: relative;
+
+    flex: 1 1 0 !important;
+
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+
+    touch-action: pan-y;
+  }
+
+  /* Composer remains fixed within the chat layout */
+  .grus-dashboard .grus-chat-composer {
+    position: relative;
+
+    flex: 0 0 auto !important;
+
+    width: 100%;
+    min-width: 0;
+
+    margin: 0;
+
+    padding-bottom: calc(
+      12px + env(safe-area-inset-bottom, 0px)
+    );
+
+    background: #10101b;
+  }
+
+  /* Hide dashboard navigation during chat */
+  .grus-dashboard:has(.grus-chat-page) .dashboard-navigation,
+  .grus-dashboard:has(.grus-chat-page) .mobile-menu-toggle,
+  .grus-dashboard:has(.grus-chat-page) .mobile-menu-backdrop,
+  .grus-dashboard:has(.grus-chat-page) .mobile-brand-header {
+    display: none !important;
+  }
+}
+
