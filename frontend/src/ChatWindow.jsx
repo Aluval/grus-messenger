@@ -418,7 +418,6 @@ const [showProfileImage, setShowProfileImage] = useState(false);
   );
 
   const bottomRef = useRef(null);
-  const messagesContainerRef = useRef(null);
   const messageInputRef = useRef(null);
   const conversationKeyRef = useRef(null);
   const sendingLockRef = useRef(false);
@@ -976,12 +975,7 @@ socket.on("message_deleted", (data) => {
   }, [token, user?.id, person?.id, conversation?.id]);
 
   useEffect(() => {
-  const container = messagesContainerRef.current;
-
-  if (!container) return;
-
-  container.scrollTo({
-    top: container.scrollHeight,
+  bottomRef.current?.scrollIntoView({
     behavior: "smooth",
   });
 }, [messages]);
