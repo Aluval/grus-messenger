@@ -1145,3 +1145,80 @@
 }
 
 
+/* =====================================================
+   GRUS — CHAT VIEWPORT LAYOUT
+===================================================== */
+
+.dashboard-main:has(.grus-chat-page) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 20px;
+}
+
+.dashboard-main:has(.grus-chat-page) .dashboard-desktop-content {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 650px) {
+  .grus-dashboard:has(.grus-chat-page) {
+    position: fixed;
+    inset: 0;
+    display: flex !important;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .grus-dashboard:has(.grus-chat-page) .dashboard-navigation,
+  .grus-dashboard:has(.grus-chat-page) .mobile-menu-toggle,
+  .grus-dashboard:has(.grus-chat-page) .mobile-menu-backdrop,
+  .grus-dashboard:has(.grus-chat-page) .mobile-brand-header {
+    display: none !important;
+  }
+
+  .dashboard-main:has(.grus-chat-page) {
+    display: flex !important;
+    flex: 1 1 0%;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden !important;
+  }
+
+  .dashboard-main:has(.grus-chat-page) .dashboard-desktop-content {
+    display: flex !important;
+    flex: 1 1 0%;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+}
+
