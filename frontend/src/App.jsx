@@ -1672,6 +1672,7 @@ if (activeSection === "chats") {
       results={results}
       loading={loading}
       error={error}
+      notice={notice}
       onConnect={handleConnect}
     >
       <div style={panelStyle}>
